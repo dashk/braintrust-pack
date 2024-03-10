@@ -93,6 +93,28 @@ pack.addSyncTable({
   },
 });
 
+pack.addSyncTable({
+  name: "Experiments",
+  description: "List of experiments",
+  identityName: "Experiment",
+  schema: schemas.ExperimentSchema,
+  formula: {
+    name: "SyncExperiments",
+    description: "Syncs the experiment",
+    parameters: [],
+    execute: async function ([], context) {
+      const response = await context.fetcher.fetch({
+        method: "GET",
+        url: 'https://api.braintrustdata.com/v1/experiment',
+      });
+      const experiments = response.body['objects'];
+      return {
+        result: experiments,
+      }
+    }
+  },
+});
+
 const parseBlob = (maybeJsonObject: any): string => {
   try {
     return JSON.parse(maybeJsonObject);
@@ -167,3 +189,4 @@ pack.addFormula({
     return response.body['row_ids'][0];
   },
 });
+
