@@ -48,7 +48,7 @@ pack.addSyncTable({
   schema: schemas.ProjectSchema,
   formula: {
     name: "SyncProjects",
-    description: "Syncs the data",
+    description: "Syncs the project data",
     parameters: [],
     execute: async function ([], context) {
       const response = await context.fetcher.fetch({
@@ -56,6 +56,35 @@ pack.addSyncTable({
         url: 'https://api.braintrustdata.com/v1/project/',
       });
   
+      return {
+        result: response.body['objects'],
+      }
+    }
+  },
+});
+
+pack.addSyncTable({
+  name: "Experiments",
+  description: "List of experiments",
+  identityName: "Experiment",
+  schema: schemas.ExperimentSchema,
+  formula: {
+    name: "SyncExperiments",
+    description: "Syncs the experiment data",
+    parameters: [
+      coda.makeParameter({
+        type: coda.ParameterType.String,
+        name: "projectName",
+        description: "The project you would like to get experiments from.",
+        optional: true,
+      }),
+    ],
+    execute: async function ([projectName], context) {
+      const url = `https://api.braintrustdata.com/v1/experiment${projectName ? '?project_name=' + projectName : ''}`;
+      const response = await context.fetcher.fetch({
+        method: "GET",
+        url,
+      });
       return {
         result: response.body['objects'],
       }
@@ -91,6 +120,41 @@ pack.addSyncTable({
       }
     }
   },
+});
+
+pack.addFormula({
+  name: "GetExperimentSummary",
+  description: "Get summary of an experiment",
+  isAction: false,
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "experimentId",
+      description: "The ID of the experiment you would like to summarize.",
+      optional: false,
+    }),
+  ],
+  execute: async function ([experimentId], context) {
+    const response = await context.fetcher.fetch({
+      method: "GET",
+      url: `https://api.braintrustdata.com/v1/experiment/${experimentId}/summarize?summarize_scores=true`,
+    });
+
+    const experimentSummary = response.body;
+
+    if (experimentSummary.scores) {
+      experimentSummary.scores = Object.values(experimentSummary.scores);
+    }
+    if (experimentSummary.metrics) {
+      experimentSummary.metrics = Object.values(experimentSummary.metrics);
+    }
+
+    return {
+      result: experimentSummary,
+    }
+  },
+  resultType: coda.ValueType.Object,
+  schema: schemas.ExperimentSummarySchema,
 });
 
 const parseBlob = (maybeJsonObject: any): string => {
