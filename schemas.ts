@@ -98,3 +98,16 @@ export const ExperimentSummarySchema = coda.makeObjectSchema({
         metrics: { type: coda.ValueType.Array, items: MetricSchema },
     }
 });
+
+export const ProjectScoreSchema = coda.makeObjectSchema({
+    name: 'ProjectScore',
+    idProperty: 'score_name',
+    displayProperty: 'score_name',
+    properties: {
+        project_name: { type: coda.ValueType.String },
+        experiment_name: { type: coda.ValueType.String },
+        created: { type: coda.ValueType.String, codaType: coda.ValueHintType.DateTime },
+        score_name: { type: coda.ValueType.String },
+        score_value: { type: coda.ValueType.Number },
+    }
+});

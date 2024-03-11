@@ -41,6 +41,34 @@ pack.addFormula({
   },
 });
 
+const getExperimentSummary = async (experimentId: string, context: coda.ExecutionContext) => {
+  const response = await context.fetcher.fetch({
+    method: "GET",
+    url: `https://api.braintrustdata.com/v1/experiment/${experimentId}/summarize?summarize_scores=true`,
+  });
+
+  return response.body;
+};
+
+const getExperiments = async (context: coda.ExecutionContext, projectName?: string, limit?: number) => {
+  const queryStrings = [];
+
+  if (projectName) {
+    queryStrings.push(`project_name=${projectName}`);
+  }
+
+  if (limit) {
+    queryStrings.push(`limit=${limit}`)
+  }
+
+  const url = `https://api.braintrustdata.com/v1/experiment${queryStrings.length > 0 ? '?' + queryStrings.join('&') : ''}`;
+  const response = await context.fetcher.fetch({
+    method: "GET",
+    url,
+  });
+  return response.body['objects'];
+};
+
 pack.addSyncTable({
   name: "Projects",
   description: "List of projects",
@@ -80,13 +108,8 @@ pack.addSyncTable({
       }),
     ],
     execute: async function ([projectName], context) {
-      const url = `https://api.braintrustdata.com/v1/experiment${projectName ? '?project_name=' + projectName : ''}`;
-      const response = await context.fetcher.fetch({
-        method: "GET",
-        url,
-      });
       return {
-        result: response.body['objects'],
+        result: await getExperiments(context, projectName),
       }
     }
   },
@@ -134,13 +157,12 @@ pack.addFormula({
       optional: false,
     }),
   ],
-  execute: async function ([experimentId], context) {
-    const response = await context.fetcher.fetch({
-      method: "GET",
-      url: `https://api.braintrustdata.com/v1/experiment/${experimentId}/summarize?summarize_scores=true`,
-    });
 
-    const experimentSummary = response.body;
+  resultType: coda.ValueType.Object,
+  schema: schemas.ExperimentSummarySchema,
+
+  execute: async function ([experimentId], context) {
+    const experimentSummary = await getExperimentSummary(experimentId, context);
 
     if (experimentSummary.scores) {
       experimentSummary.scores = Object.values(experimentSummary.scores);
@@ -149,12 +171,35 @@ pack.addFormula({
       experimentSummary.metrics = Object.values(experimentSummary.metrics);
     }
 
-    return {
-      result: experimentSummary,
-    }
+    return experimentSummary;
   },
-  resultType: coda.ValueType.Object,
-  schema: schemas.ExperimentSummarySchema,
+});
+
+pack.addFormula({
+  name: "GetExperimentScore",
+  description: "Get an experiment score by name",
+  isAction: false,
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "experimentId",
+      description: "The ID of the experiment you would like to fetch.",
+      optional: false,
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "scoreName",
+      description: "The name of the score.",
+      optional: false,
+    }),
+  ],
+
+  resultType: coda.ValueType.Number,
+
+  execute: async function ([experimentId, scoreName], context) {
+    const experimentSummary = await getExperimentSummary(experimentId, context);
+    return experimentSummary.scores[scoreName]?.score;
+  },
 });
 
 const parseBlob = (maybeJsonObject: any): string => {
@@ -229,5 +274,59 @@ pack.addFormula({
     });
 
     return response.body['row_ids'][0];
+  },
+});
+
+pack.addSyncTable({
+  name: "LatestProjectScores",
+  description: "Scores associated with the latest experiment in a project",
+  identityName: "ProjectScore",
+  schema: schemas.ProjectScoreSchema,
+  formula: {
+    name: "SyncProjectScores",
+    description: "Syncs the data",
+    parameters: [
+      coda.makeParameter({
+        type: coda.ParameterType.String,
+        name: "projectName",
+        description: "The project you would like to fetch the experiment on.",
+        optional: false,
+      }),
+      coda.makeParameter({
+        type: coda.ParameterType.String,
+        name: "experimentPrefix",
+        description: "Prefix that the experiment must match.",
+        optional: true,
+      }),
+    ],
+    execute: async function ([projectName, experimentPrefix], context) {
+      const experiments = await getExperiments(context, projectName, 50);
+
+      if (experiments?.length === 0) {
+        throw new coda.UserVisibleError(`Unable to locate experiments in project ${projectName}`);
+      }
+      
+      const latestExperiment = experimentPrefix ? experiments.find((exp) => exp.name.startsWith(experimentPrefix)) : experiments[0];
+
+      if (!latestExperiment) {
+        throw new coda.UserVisibleError(`Latest experiment for project ${projectName} cannot be found.`);
+      }
+
+      const experimentSummary = await getExperimentSummary(latestExperiment.id, context);
+      
+      const experimentScores = experimentSummary.scores ? Object.values(experimentSummary.scores) : [];
+
+      return {
+        result: experimentScores.map((experimentScore: any) => {
+          return {
+            project_name: projectName,
+            experiment_name: latestExperiment.name,
+            created: latestExperiment.created,
+            score_name: experimentScore.name,
+            score_value: experimentScore.score,
+          };
+        }),
+      }
+    }
   },
 });
