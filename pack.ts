@@ -1,5 +1,4 @@
 import * as coda from "@codahq/packs-sdk";
-import * as braintrust from 'braintrust';
 import * as schemas from "./schemas";
 import * as crypto from 'crypto';
 
@@ -68,6 +67,10 @@ const getExperiments = async (context: coda.ExecutionContext, projectName?: stri
   });
   return response.body['objects'];
 };
+
+const getMd5 = (input: string): string => {
+  return crypto.createHash('md5').update(input).digest('hex');
+}
 
 pack.addSyncTable({
   name: "Projects",
@@ -265,9 +268,7 @@ pack.addFormula({
             expected: expected ? parseBlob(expected) : null,
             metadata: metadata ? parseBlob(metadata) : null,
             // @NOTE: Doing the parse -> stringify to eliminate formatting in the incoming JSON blob
-            id: id ? id : crypto.createHash('md5').update(
-              `${datasetId}|${JSON.stringify(parseBlob(input))}`
-            ).digest('hex'),
+            id: id ? id : getMd5(`${datasetId}|${JSON.stringify(parseBlob(input))}`),
           },
         ],
       })
@@ -319,6 +320,8 @@ pack.addSyncTable({
       return {
         result: experimentScores.map((experimentScore: any) => {
           return {
+            // Generate a consistent ID for sync table
+            project_score_id: getMd5(`${projectName}|${experimentScore.name}`),
             project_name: projectName,
             experiment_name: latestExperiment.name,
             created: latestExperiment.created,
