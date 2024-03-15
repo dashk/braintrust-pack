@@ -249,11 +249,17 @@ pack.addFormula({
       description: "ID of the row. If not set, If not set, the pack will generate one using `md5(json.stringify(input) + 'dataset ID')`.",
       optional: true,
     }),
+    coda.makeParameter({
+      type: coda.ParameterType.StringArray,
+      name: "tags",
+      description: "Tags for the row",
+      optional: true,
+    }),
   ],
 
   resultType: coda.ValueType.String,
 
-  execute: async function ([datasetId, input, expected, metadata, id], context) {
+  execute: async function ([datasetId, input, expected, metadata, id, tags], context) {
     const response = await context.fetcher.fetch({
       method: "POST",
       url: `https://api.braintrustdata.com/v1/dataset/${datasetId}/insert`,
@@ -269,6 +275,7 @@ pack.addFormula({
             metadata: metadata ? parseBlob(metadata) : null,
             // @NOTE: Doing the parse -> stringify to eliminate formatting in the incoming JSON blob
             id: id ? id : getMd5(`${datasetId}|${JSON.stringify(parseBlob(input))}`),
+            tags: tags ? tags : null,
           },
         ],
       })
