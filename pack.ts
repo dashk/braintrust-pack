@@ -20,6 +20,39 @@ const getProject = async (id: string, context: coda.ExecutionContext) => {
   return response.body;
 };
 
+const upsertDatasetRow = async (
+  datasetId: string,
+  id: string,
+  input: object,
+  expected: object,
+  metadata: object,
+  context: coda.ExecutionContext,
+  tags?: string[],
+): Promise<string> => {
+  const response = await context.fetcher.fetch({
+    method: "POST",
+    url: `https://api.braintrustdata.com/v1/dataset/${datasetId}/insert`,
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({
+      events: [
+        {
+          input,
+          expected,
+          metadata,
+          // @NOTE: Doing the parse -> stringify to eliminate formatting in the incoming JSON blob
+          id: id ? id : getMd5(`${datasetId}|${JSON.stringify(input)}`),
+          tags: tags ? tags : null,
+        },
+      ],
+    })
+  });
+
+  return response.body['row_ids'][0];
+}
+
 pack.addFormula({
   name: "GetProject",
   description: "Get a project object by its id",
@@ -205,7 +238,7 @@ pack.addFormula({
   },
 });
 
-const parseBlob = (maybeJsonObject: any): string => {
+const parseBlob = (maybeJsonObject: any): object => {
   try {
     return JSON.parse(maybeJsonObject);
   }
@@ -260,28 +293,17 @@ pack.addFormula({
   resultType: coda.ValueType.String,
 
   execute: async function ([datasetId, input, expected, metadata, id, tags], context) {
-    const response = await context.fetcher.fetch({
-      method: "POST",
-      url: `https://api.braintrustdata.com/v1/dataset/${datasetId}/insert`,
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify({
-        events: [
-          {
-            input: input ? parseBlob(input) : null,
-            expected: expected ? parseBlob(expected) : null,
-            metadata: metadata ? parseBlob(metadata) : null,
-            // @NOTE: Doing the parse -> stringify to eliminate formatting in the incoming JSON blob
-            id: id ? id : getMd5(`${datasetId}|${JSON.stringify(parseBlob(input))}`),
-            tags: tags ? tags : null,
-          },
-        ],
-      })
-    });
+    const insertedRowId = upsertDatasetRow(
+      datasetId,
+      id,
+      parseBlob(input),
+      parseBlob(expected),
+      parseBlob(metadata),
+      context,
+      tags,
+    );
 
-    return response.body['row_ids'][0];
+    return insertedRowId;
   },
 });
 
