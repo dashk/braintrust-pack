@@ -11,6 +11,15 @@ pack.setUserAuthentication({
   type: coda.AuthenticationType.HeaderBearerToken,
 });
 
+const getProjectByName = async (name: string, context: coda.ExecutionContext) => {
+  const response = await context.fetcher.fetch({
+    method: "GET",
+    url: `https://api.braintrustdata.com/v1/project?project_name=${name}`,
+  });
+
+  return response.body['objects'][0];
+}
+
 const getProject = async (id: string, context: coda.ExecutionContext) => {
   const response = await context.fetcher.fetch({
     method: "GET",
@@ -82,6 +91,25 @@ const getExperimentSummary = async (experimentId: string, context: coda.Executio
   return response.body;
 };
 
+const getExperimentIdByName = async (projectName: string, experimentName: string, context: coda.ExecutionContext) => {
+  const response = await context.fetcher.fetch({
+    method: "GET",
+    url: `https://api.braintrustdata.com/v1/experiment?project_name=${encodeURIComponent(projectName)}&experiment_name=${encodeURIComponent(experimentName)}`,
+  });
+
+  const experiments = response.body['objects'];
+
+  if (experiments.length === 0) {
+    throw new coda.UserVisibleError(`Unable to locate experiment '${experimentName}' in project '${projectName}'`);
+  }
+
+  if (experiments.length > 1) {
+    throw new coda.UserVisibleError(`Multiple experiments found with name '${experimentName}' in project '${projectName}'`);
+  }
+
+  return experiments[0].id;
+};
+
 const getExperiments = async (context: coda.ExecutionContext, projectName?: string, limit?: number) => {
   const queryStrings = [];
 
@@ -100,6 +128,30 @@ const getExperiments = async (context: coda.ExecutionContext, projectName?: stri
   });
   return response.body['objects'];
 };
+
+interface ExperimentLog {
+  id: string;
+  created: string;
+  org_id: string;
+  project_id: string;
+  experiment_id: string;
+  input: Object;
+  output: Object;
+  expected: Object;
+  scores: Record<string, number>;
+  metadata: Record<string, any>;
+  tags: string[];
+}
+
+const getExperimentLogs = async (context: coda.ExecutionContext, projectName: string, experimentName: string, limit: number = 10000): Promise<ExperimentLog[]> => {
+  const experimentId = await getExperimentIdByName(projectName, experimentName, context);
+  const response = await context.fetcher.fetch({
+    method: "GET",
+    url: `https://api.braintrustdata.com/v1/experiment/${experimentId}/fetch?limit=${limit}`,
+  });
+
+  return response.body['events'];
+}
 
 const getMd5 = (input: string): string => {
   return crypto.createHash('md5').update(input).digest('hex');
@@ -356,6 +408,55 @@ pack.addSyncTable({
             created: latestExperiment.created,
             score_name: experimentScore.name,
             score_value: experimentScore.score,
+          };
+        }),
+      }
+    }
+  },
+});
+
+pack.addSyncTable({
+  name: "ExperimentLogs",
+  description: "Logs of an experiment",
+  identityName: "ExperimentLog",
+  schema: schemas.ExperimentLogSchema,
+  formula: {
+    name: "SyncExperimentLogs",
+    description: "Syncs the experiment log",
+    parameters: [
+      coda.makeParameter({
+        type: coda.ParameterType.String,
+        name: "projectName",
+        description: "The project you would like to fetch the experiment on.",
+        optional: false,
+      }),
+      coda.makeParameter({
+        type: coda.ParameterType.String,
+        name: "experimentName",
+        description: "The experiment you would like to fetch the logs from.",
+        optional: false,
+      }),
+      coda.makeParameter({
+        type: coda.ParameterType.Number,
+        name: "limit",
+        description: "The number of logs to fetch. Default to 10000",
+        optional: true,
+      }),
+    ],
+    execute: async function ([projectName, experimentName, limit], context) {
+      const experimentLogs = await getExperimentLogs(context, projectName, experimentName, limit);
+      return {
+        result: experimentLogs.map((experimentLog: ExperimentLog) => {
+          return {
+            experiment_log_id: experimentLog.id,
+            created: experimentLog.created,
+            project_id: experimentLog.project_id,
+            experiment_id: experimentLog.experiment_id,
+            inputStr: JSON.stringify(experimentLog.input),
+            outputStr: JSON.stringify(experimentLog.output),
+            expectedStr: JSON.stringify(experimentLog.expected),
+            scoresStr: JSON.stringify(experimentLog.scores),
+            metadataStr: JSON.stringify(experimentLog.metadata),
           };
         }),
       }

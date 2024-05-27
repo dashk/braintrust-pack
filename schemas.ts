@@ -112,3 +112,21 @@ export const ProjectScoreSchema = coda.makeObjectSchema({
         score_value: { type: coda.ValueType.Number },
     }
 });
+
+export const ExperimentLogSchema = coda.makeObjectSchema({
+    name: 'ExperimentLog',
+    displayProperty: 'experiment_log_id',
+    idProperty: 'experiment_log_id',
+    properties: {
+        experiment_log_id: { type: coda.ValueType.String },
+        created: { type: coda.ValueType.String, codaType: coda.ValueHintType.DateTime },
+        project_id: { type: coda.ValueType.String },
+        experiment_id: { type: coda.ValueType.String },
+        // Need Dynamic schema
+        inputStr: { type: coda.ValueType.String, description: 'Input as a JSON string' },
+        outputStr: { type: coda.ValueType.String, description: 'Output as a JSON string'},
+        expectedStr: { type: coda.ValueType.String, description: 'Expected as a JSON string'},
+        scoresStr: { type: coda.ValueType.String, description: 'Scores as a JSON string'},
+        metadataStr: { type: coda.ValueType.String, description: 'Metadata as a JSON string'},
+    },
+});
