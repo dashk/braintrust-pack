@@ -62,6 +62,32 @@ const upsertDatasetRow = async (
   return response.body['row_ids'][0];
 }
 
+const deleteDatasetRow = async(id: string, datasetId: string, context: coda.ExecutionContext): Promise<boolean> => {
+  const response = await context.fetcher.fetch({
+    method: "POST",
+    url: `https://api.braintrustdata.com/v1/dataset/${datasetId}/insert`,
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify({
+      events: [
+        {
+          id,
+          "_object_delete": true,
+          "_is_merge": true,
+        },
+      ],
+    })
+  });
+
+  if (response.status !== 200) {
+    throw new coda.UserVisibleError(`Failed to delete row with ID ${id}. Error: ${response.body}`);
+  }
+
+  return true;
+};
+
 pack.addFormula({
   name: "GetProject",
   description: "Get a project object by its id",
@@ -359,6 +385,32 @@ pack.addFormula({
   },
 });
 
+pack.addFormula({
+  name: "DeleteDatasetRow",
+  description: "Deletes a row from a dataset",
+  isAction: true,
+  parameters: [
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "id",
+      description: "ID of the row",
+      optional: false,
+    }),
+    coda.makeParameter({
+      type: coda.ParameterType.String,
+      name: "datasetId",
+      description: "The dataset you would like to insert row to.",
+      optional: false,
+    }),
+  ],
+
+  resultType: coda.ValueType.Boolean,
+
+  execute: async function ([id, datasetId], context) {
+    return await deleteDatasetRow(id, datasetId, context);
+  },
+});
+
 pack.addSyncTable({
   name: "LatestProjectScores",
   description: "Scores associated with the latest experiment in a project",
@@ -463,3 +515,4 @@ pack.addSyncTable({
     }
   },
 });
+
