@@ -316,11 +316,14 @@ pack.addFormula({
   },
 });
 
-const parseBlob = (maybeJsonObject: any): object => {
+const parseBlob = (maybeJsonObject: any, propertyName: string, enforceValidJson: boolean): object => {
   try {
     return JSON.parse(maybeJsonObject);
   }
   catch {
+    if (enforceValidJson) {
+      throw new coda.UserVisibleError(`Invalid JSON object: ${propertyName}`);
+    }
     return maybeJsonObject;
   }
 };
@@ -366,17 +369,23 @@ pack.addFormula({
       description: "Tags for the row",
       optional: true,
     }),
+    coda.makeParameter({
+      type: coda.ParameterType.Boolean,
+      name: "enforceValidJson",
+      description: "If true, the input, expected, and metadata must be valid JSON objects. Default to false.",
+      optional: true,
+    }),
   ],
 
   resultType: coda.ValueType.String,
 
-  execute: async function ([datasetId, input, expected, metadata, id, tags], context) {
+  execute: async function ([datasetId, input, expected, metadata, id, tags, enforceValidJson], context) {
     const insertedRowId = upsertDatasetRow(
       datasetId,
       id,
-      parseBlob(input),
-      parseBlob(expected),
-      parseBlob(metadata),
+      parseBlob(input, 'input', enforceValidJson),
+      parseBlob(expected, 'expected', enforceValidJson),
+      parseBlob(metadata, 'metadata', enforceValidJson),
       context,
       tags,
     );
