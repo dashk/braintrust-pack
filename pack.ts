@@ -360,7 +360,7 @@ pack.addFormula({
     coda.makeParameter({
       type: coda.ParameterType.String,
       name: "id",
-      description: "ID of the row. If not set, If not set, the pack will generate one using `md5(json.stringify(input) + 'dataset ID')`.",
+      description: "ID of the row. If not set, If not set, the pack will generate one using `md5(`<dataset ID>|${json.stringify(input)}`.",
       optional: true,
     }),
     coda.makeParameter({
