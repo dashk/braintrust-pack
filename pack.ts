@@ -5,7 +5,10 @@ import * as crypto from 'crypto';
 // This line creates your new Pack.
 export const pack = coda.newPack();
 
-pack.addNetworkDomain("braintrustdata.com");
+const BRAINTTRUST_DOMAIN = 'braintrustdata.com';
+const BRAINTRUST_API_URL = `https://api.${BRAINTTRUST_DOMAIN}`;
+
+pack.addNetworkDomain(BRAINTTRUST_DOMAIN);
 
 pack.setUserAuthentication({
   type: coda.AuthenticationType.HeaderBearerToken,
@@ -14,7 +17,7 @@ pack.setUserAuthentication({
 const getProjectByName = async (name: string, context: coda.ExecutionContext) => {
   const response = await context.fetcher.fetch({
     method: "GET",
-    url: `https://api.braintrustdata.com/v1/project?project_name=${name}`,
+    url: `${BRAINTRUST_API_URL}/v1/project?project_name=${name}`,
   });
 
   return response.body['objects'][0];
@@ -23,7 +26,7 @@ const getProjectByName = async (name: string, context: coda.ExecutionContext) =>
 const getProject = async (id: string, context: coda.ExecutionContext) => {
   const response = await context.fetcher.fetch({
     method: "GET",
-    url: `https://api.braintrustdata.com/v1/project/${id}`,
+    url: `${BRAINTRUST_API_URL}/v1/project/${id}`,
   });
 
   return response.body;
@@ -40,7 +43,7 @@ const upsertDatasetRow = async (
 ): Promise<string> => {
   const response = await context.fetcher.fetch({
     method: "POST",
-    url: `https://api.braintrustdata.com/v1/dataset/${datasetId}/insert`,
+    url: `${BRAINTRUST_API_URL}/v1/dataset/${datasetId}/insert`,
     headers: {
       "Content-Type": "application/json",
       "Accept": "application/json",
@@ -65,7 +68,7 @@ const upsertDatasetRow = async (
 const deleteDatasetRow = async(id: string, datasetId: string, context: coda.ExecutionContext): Promise<boolean> => {
   const response = await context.fetcher.fetch({
     method: "POST",
-    url: `https://api.braintrustdata.com/v1/dataset/${datasetId}/insert`,
+    url: `https://api.${BRAINTTRUST_DOMAIN}/v1/dataset/${datasetId}/insert`,
     headers: {
       "Content-Type": "application/json",
       "Accept": "application/json",
@@ -111,7 +114,7 @@ pack.addFormula({
 const getExperimentSummary = async (experimentId: string, context: coda.ExecutionContext) => {
   const response = await context.fetcher.fetch({
     method: "GET",
-    url: `https://api.braintrustdata.com/v1/experiment/${experimentId}/summarize?summarize_scores=true`,
+    url: `${BRAINTRUST_API_URL}/v1/experiment/${experimentId}/summarize?summarize_scores=true`,
   });
 
   return response.body;
@@ -120,7 +123,7 @@ const getExperimentSummary = async (experimentId: string, context: coda.Executio
 const getExperimentIdByName = async (projectName: string, experimentName: string, context: coda.ExecutionContext) => {
   const response = await context.fetcher.fetch({
     method: "GET",
-    url: `https://api.braintrustdata.com/v1/experiment?project_name=${encodeURIComponent(projectName)}&experiment_name=${encodeURIComponent(experimentName)}`,
+    url: `${BRAINTRUST_API_URL}/v1/experiment?project_name=${encodeURIComponent(projectName)}&experiment_name=${encodeURIComponent(experimentName)}`,
   });
 
   const experiments = response.body['objects'];
@@ -147,7 +150,7 @@ const getExperiments = async (context: coda.ExecutionContext, projectName?: stri
     queryStrings.push(`limit=${limit}`)
   }
 
-  const url = `https://api.braintrustdata.com/v1/experiment${queryStrings.length > 0 ? '?' + queryStrings.join('&') : ''}`;
+  const url = `${BRAINTRUST_API_URL}/v1/experiment${queryStrings.length > 0 ? '?' + queryStrings.join('&') : ''}`;
   const response = await context.fetcher.fetch({
     method: "GET",
     url,
@@ -173,7 +176,7 @@ const getExperimentLogs = async (context: coda.ExecutionContext, projectName: st
   const experimentId = await getExperimentIdByName(projectName, experimentName, context);
   const response = await context.fetcher.fetch({
     method: "GET",
-    url: `https://api.braintrustdata.com/v1/experiment/${experimentId}/fetch?limit=${limit}`,
+    url: `${BRAINTRUST_API_URL}/v1/experiment/${experimentId}/fetch?limit=${limit}`,
   });
 
   return response.body['events'];
@@ -195,7 +198,7 @@ pack.addSyncTable({
     execute: async function ([], context) {
       const response = await context.fetcher.fetch({
         method: "GET",
-        url: 'https://api.braintrustdata.com/v1/project/',
+        url: `${BRAINTRUST_API_URL}/v1/project/`,
       });
   
       return {
@@ -241,7 +244,7 @@ pack.addSyncTable({
     execute: async function ([], context) {
       const response = await context.fetcher.fetch({
         method: "GET",
-        url: 'https://api.braintrustdata.com/v1/dataset',
+        url: `${BRAINTRUST_API_URL}/v1/dataset`,
       });
 
       const datasets = response.body['objects'];
@@ -520,6 +523,56 @@ pack.addSyncTable({
             metadataStr: JSON.stringify(experimentLog.metadata),
           };
         }),
+      }
+    }
+  },
+});
+
+const getBenchmarks = async (context: coda.ExecutionContext, datasetId: string, limit?: number) => {
+  const response = await context.fetcher.fetch({
+    method: "GET",
+    url: `${BRAINTRUST_API_URL}/v1/dataset/${datasetId}/fetch${limit ? `?limit=${limit}` : ''}`,
+  });
+
+  const events = response.body['events'];
+  
+  // Transform the events to match our schema
+  return events.map((event: any) => ({
+    id: event.id,
+    project_id: event.project_id,
+    dataset_id: event.dataset_id,
+    inputStr: JSON.stringify(event.input),
+    expectedStr: JSON.stringify(event.expected),
+    metadataStr: JSON.stringify(event.metadata),
+    tags: event.tags || [],
+  }));
+};
+
+pack.addSyncTable({
+  name: "Benchmarks",
+  description: "List of benchmarks in a dataset",
+  identityName: "Benchmark",
+  schema: schemas.BenchmarkSchema,
+  formula: {
+    name: "SyncBenchmarks",
+    description: "Syncs the benchmark data",
+    parameters: [
+      coda.makeParameter({
+        type: coda.ParameterType.String,
+        name: "datasetId",
+        description: "The dataset you would like to get benchmarks from.",
+        optional: false,
+      }),
+      coda.makeParameter({
+        type: coda.ParameterType.Number,
+        name: "limit",
+        description: "The maximum number of benchmarks to fetch. Default to 0 (unlimited).",
+        optional: true,
+      }),
+    ],
+    execute: async function ([datasetId, limit], context) {
+      return {
+        result: await getBenchmarks(context, datasetId, limit),
       }
     }
   },
