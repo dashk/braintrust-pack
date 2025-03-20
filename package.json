@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@codahq/packs-sdk": "^1.7.5",
+    "@codahq/packs-sdk": "^1.9.2",
     "braintrust": "*"
   },
   "devDependencies": {
