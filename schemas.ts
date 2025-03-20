@@ -130,3 +130,18 @@ export const ExperimentLogSchema = coda.makeObjectSchema({
         metadataStr: { type: coda.ValueType.String, description: 'Metadata as a JSON string'},
     },
 });
+
+export const BenchmarkSchema = coda.makeObjectSchema({
+    name: 'Benchmark',
+    displayProperty: 'id',
+    idProperty: 'id',
+    properties: {
+        id: { type: coda.ValueType.String },
+        project_id: { type: coda.ValueType.String },
+        dataset_id: { type: coda.ValueType.String },
+        inputStr: { type: coda.ValueType.String, description: 'Input as a JSON string' },
+        expectedStr: { type: coda.ValueType.String, description: 'Expected as a JSON string' },
+        metadataStr: { type: coda.ValueType.String, description: 'Metadata as a JSON string' },
+        tags: { type: coda.ValueType.Array, items: { type: coda.ValueType.String } },
+    }
+});
